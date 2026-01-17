@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import usePartySocket from "partysocket/react";
 import {
@@ -11,6 +11,7 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
+  DragStartEvent,
   DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -20,11 +21,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
-import { GameState, Item, ServerMessage, ClientMessage } from "@/lib/types";
+import { GameState, Item, ServerMessage, ClientMessage, PlayerCursor } from "@/lib/types";
 import { presetPacks, packToItems, textToItems } from "@/lib/presets";
 import { SortableItem } from "@/components/SortableItem";
 import { PlayerList } from "@/components/PlayerList";
 import { Timer } from "@/components/Timer";
+import { Cursor } from "@/components/Cursor";
 
 const PARTYKIT_HOST = process.env.NEXT_PUBLIC_PARTYKIT_HOST || "localhost:1999";
 
@@ -38,6 +40,14 @@ export default function RoomPage() {
   const [customItems, setCustomItems] = useState("");
   const [selectedPack, setSelectedPack] = useState<string>("");
   const [hasJoined, setHasJoined] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [cursors, setCursors] = useState<Record<string, PlayerCursor>>({});
+
+  const copyRoomCode = async () => {
+    await navigator.clipboard.writeText(roomId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const socket = usePartySocket({
     host: PARTYKIT_HOST,
@@ -47,6 +57,17 @@ export default function RoomPage() {
 
       if (message.type === "sync") {
         setGameState(message.state);
+      } else if (message.type === "cursor-update") {
+        setCursors((prev) => ({
+          ...prev,
+          [message.cursor.playerId]: message.cursor,
+        }));
+      } else if (message.type === "player-left") {
+        setCursors((prev) => {
+          const next = { ...prev };
+          delete next[message.playerId];
+          return next;
+        });
       } else if (message.type === "error") {
         console.error("Server error:", message.message);
       }
@@ -70,6 +91,37 @@ export default function RoomPage() {
     socket.send(JSON.stringify(msg));
   }, [socket]);
 
+  // Track currently dragging item
+  const [draggingItem, setDraggingItem] = useState<string | null>(null);
+
+  // Cursor tracking (throttled)
+  const lastCursorSent = useRef(0);
+  const draggingItemRef = useRef<string | null>(null);
+
+  // Keep ref in sync with state for use in event handler
+  useEffect(() => {
+    draggingItemRef.current = draggingItem;
+  }, [draggingItem]);
+
+  useEffect(() => {
+    if (!gameState || gameState.status !== "playing") return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const now = Date.now();
+      if (now - lastCursorSent.current < 50) return; // Throttle to 20 updates/sec
+      lastCursorSent.current = now;
+
+      send({
+        type: "cursor-move",
+        position: { x: e.clientX, y: e.clientY },
+        draggingItem: draggingItemRef.current,
+      });
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, [gameState?.status, send]);
+
   // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -79,7 +131,17 @@ export default function RoomPage() {
     })
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    if (!gameState) return;
+    const item = gameState.items.find((i) => i.id === event.active.id);
+    if (item) {
+      setDraggingItem(item.text);
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setDraggingItem(null); // Clear dragging state
+
     const { active, over } = event;
     if (!over || active.id === over.id || !gameState) return;
 
@@ -110,6 +172,12 @@ export default function RoomPage() {
     if (items.length >= 2) {
       handleSetItems(items);
     }
+  };
+
+  const handleShuffle = () => {
+    if (!gameState) return;
+    const shuffled = [...gameState.items].sort(() => Math.random() - 0.5);
+    send({ type: "set-items", items: shuffled });
   };
 
   const handleStartGame = () => {
@@ -153,10 +221,18 @@ export default function RoomPage() {
             >
               ← Leave
             </button>
-            <div className="text-center">
+            <button
+              onClick={copyRoomCode}
+              className="text-center group"
+            >
               <div className="text-sm text-gray-500">Room Code</div>
-              <div className="text-2xl font-mono font-bold text-gray-800">{roomId}</div>
-            </div>
+              <div className="text-2xl font-mono font-bold text-gray-800 group-hover:text-blue-600 transition-colors">
+                {roomId}
+                <span className="ml-2 text-sm font-normal text-gray-400 group-hover:text-blue-500">
+                  {copied ? "Copied!" : "Copy"}
+                </span>
+              </div>
+            </button>
             <div className="w-16" />
           </div>
 
@@ -290,9 +366,17 @@ export default function RoomPage() {
                 {/* Current Items Preview */}
                 {gameState.items.length > 0 && (
                   <div className="mt-4">
-                    <label className="text-sm text-gray-500 block mb-2">
-                      Current Items ({gameState.items.length})
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm text-gray-500">
+                        Current Items ({gameState.items.length})
+                      </label>
+                      <button
+                        onClick={handleShuffle}
+                        className="text-sm text-blue-500 hover:text-blue-600 font-medium"
+                      >
+                        Shuffle
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {gameState.items.map((item) => (
                         <span
@@ -380,6 +464,7 @@ export default function RoomPage() {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
               <SortableContext
@@ -426,6 +511,11 @@ export default function RoomPage() {
             </div>
           )}
         </div>
+
+        {/* Other players' cursors */}
+        {Object.values(cursors).map((cursor) => (
+          <Cursor key={cursor.playerId} cursor={cursor} />
+        ))}
       </div>
     );
   }

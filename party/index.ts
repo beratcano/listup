@@ -27,6 +27,19 @@ export interface GameState {
   finalList: Item[] | null;
 }
 
+interface CursorPosition {
+  x: number;
+  y: number;
+}
+
+interface PlayerCursor {
+  playerId: string;
+  playerName: string;
+  playerColor: string;
+  position: CursorPosition;
+  draggingItem: string | null;
+}
+
 // Message types
 type ClientMessage =
   | { type: "join"; name: string }
@@ -36,13 +49,26 @@ type ClientMessage =
   | { type: "reorder"; items: Item[] }
   | { type: "toggle-satisfied" }
   | { type: "request-more-time" }
-  | { type: "new-round" };
+  | { type: "new-round" }
+  | { type: "cursor-move"; position: CursorPosition; draggingItem: string | null };
 
 type ServerMessage =
   | { type: "sync"; state: GameState }
   | { type: "player-joined"; player: Player }
   | { type: "player-left"; playerId: string }
+  | { type: "cursor-update"; cursor: PlayerCursor }
   | { type: "error"; message: string };
+
+const PLAYER_COLORS = [
+  "#3B82F6", // blue
+  "#EF4444", // red
+  "#10B981", // green
+  "#F59E0B", // amber
+  "#8B5CF6", // violet
+  "#EC4899", // pink
+  "#06B6D4", // cyan
+  "#F97316", // orange
+];
 
 export default class ListUpServer implements Party.Server {
   state: GameState;
@@ -114,6 +140,9 @@ export default class ListUpServer implements Party.Server {
         break;
       case "new-round":
         this.handleNewRound(sender);
+        break;
+      case "cursor-move":
+        this.handleCursorMove(sender, data.position, data.draggingItem);
         break;
     }
   }
@@ -237,6 +266,33 @@ export default class ListUpServer implements Party.Server {
     }
 
     this.broadcastState();
+  }
+
+  handleCursorMove(conn: Party.Connection, position: CursorPosition, draggingItem: string | null) {
+    if (this.state.status !== "playing") return;
+
+    const player = this.state.players[conn.id];
+    if (!player) return;
+
+    // Get player's color based on join order
+    const playerIds = Object.keys(this.state.players);
+    const playerIndex = playerIds.indexOf(conn.id);
+    const playerColor = PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
+
+    // Broadcast cursor to all OTHER players (not the sender)
+    const cursor: PlayerCursor = {
+      playerId: conn.id,
+      playerName: player.name,
+      playerColor,
+      position,
+      draggingItem,
+    };
+
+    for (const connection of this.room.getConnections()) {
+      if (connection.id !== conn.id) {
+        connection.send(JSON.stringify({ type: "cursor-update", cursor }));
+      }
+    }
   }
 
   checkGameEnd() {
