@@ -15,20 +15,45 @@ The chaos is the point. When everyone finally agrees, you get your list.
 
 ## How to Play
 
-1. Create a room, pick finish mode (consensus or timed), share the code
-2. Add your own words or pick a preset pack
-3. Start the game
-4. DRAG THINGS AROUND (everyone at once)
-5. Game ends when:
-   - **Consensus**: Everyone clicks "I'm satisfied" -> final list revealed
-   - **Timed**: Timer runs out -> final list revealed
+1. Create a room, share the code with friends
+2. Pick a preset pack, browse community packs, or add your own words
+3. Choose your game mode and settings
+4. Start the game
+5. DRAG THINGS AROUND (everyone at once, or privately in Blind mode)
+6. Game ends based on your finish mode
+
+## Game Modes
+
+### Finish Modes
+- **Consensus**: Game ends when everyone clicks "I'm Satisfied"
+- **Timed**: Game ends when the timer runs out (30s / 1min / 2min / 3min)
+- **Blitz**: Quick 30-second chaos mode
+
+### Game Variants
+- **Classic**: Everyone ranks together in real-time. Pure chaos.
+- **Debate**: Discussion phase first, then rank together. Great for strategic groups.
+- **Blind**: Everyone ranks privately. Results aggregated via Borda count voting.
+
+### Spectator Mode
+Join as a spectator to watch the chaos unfold without participating.
+
+## Features
+
+- **20+ Preset Packs**: Curated lists across Food, Entertainment, Lifestyle, Sports, and more
+- **Community Packs**: Browse and use packs shared by other players, or share your own
+- **Mix Mode**: Combine multiple packs into one shuffled list
+- **Real-time Cursors**: See where everyone is dragging
+- **Reactions**: Send emoji reactions during the game
+- **Avatars**: Pick from 16 emoji avatars
+- **Session History**: View past rankings from your session
 
 ## Tech Stack
 
-- **Next.js** - React framework
-- **PartyKit** - Real-time multiplayer
+- **Next.js 16** - React 19 framework
+- **PartyKit** - Real-time multiplayer sync
+- **Supabase** - Community packs database
 - **dnd-kit** - Drag and drop
-- **Tailwind CSS** - Styling
+- **Tailwind CSS 4** - Styling
 
 ## Development
 
@@ -44,6 +69,16 @@ npx partykit dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the app.
+
+### Environment Variables
+
+Create a `.env.local` file:
+
+```
+NEXT_PUBLIC_PARTYKIT_HOST=localhost:1999
+NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+```
 
 ## Roadmap
 

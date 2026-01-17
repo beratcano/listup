@@ -9,17 +9,24 @@ export default function Home() {
   const [joinCode, setJoinCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [mode, setMode] = useState<"menu" | "create" | "join">("menu");
+  const [joinAsSpectator, setJoinAsSpectator] = useState(false);
 
   const handleCreate = () => {
     if (!playerName.trim()) return;
     const roomCode = generateRoomCode();
     localStorage.setItem("listup-name", playerName.trim());
+    localStorage.removeItem("listup-spectator");
     router.push(`/room/${roomCode}`);
   };
 
   const handleJoin = () => {
     if (!playerName.trim() || !joinCode.trim()) return;
     localStorage.setItem("listup-name", playerName.trim());
+    if (joinAsSpectator) {
+      localStorage.setItem("listup-spectator", "true");
+    } else {
+      localStorage.removeItem("listup-spectator");
+    }
     router.push(`/room/${joinCode.toUpperCase().trim()}`);
   };
 
@@ -98,12 +105,21 @@ export default function Home() {
                 className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-lg text-center font-mono tracking-widest"
                 maxLength={6}
               />
+              <label className="flex items-center gap-2 px-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={joinAsSpectator}
+                  onChange={(e) => setJoinAsSpectator(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-500"
+                />
+                <span className="text-gray-600 text-sm">Join as spectator (watch only)</span>
+              </label>
               <button
                 onClick={handleJoin}
                 disabled={joinCode.length < 4}
                 className="w-full py-4 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-colors text-lg"
               >
-                Join
+                {joinAsSpectator ? "Watch" : "Join"}
               </button>
             </div>
           )}
